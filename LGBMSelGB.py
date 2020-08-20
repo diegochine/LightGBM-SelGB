@@ -1,16 +1,20 @@
 import numpy as np
 import lightgbm as lgb
 from collections import OrderedDict
-from random import random
+from numpy.random import uniform
 
+from .utils import timeit
 
 class LGBMSelGB:
 
-    def __init__(self, n_estimators=100, n_iter_sample=1, p=0.1, method='random'):
+    def __init__(self, n_estimators=100, n_iter_sample=1, p=0.1,
+                 max_p=0.5, k_factor=0.5, method='random'):
         self.n_estimators = n_estimators
         self.n_iter_sample = n_iter_sample
         self.p = p
         self.method = method
+        self.max_p = max_p
+        self.k_factor = k_factor
         self.booster = None
         self.enable_file = False
         self.evals_result = {}
@@ -56,9 +60,9 @@ class LGBMSelGB:
             if self.method == 'fixed':
                 pass
             elif self.method == 'random':
-                self.p = random()
+                self.p = uniform(0.0, self.max_p)
             elif self.method == 'inverse':
-                self.p = self.p * 0.8
+                self.p = self.p * self.k_factor
             print('[SelGB] [Info] new p:', self.p)
         else:
             if self.method == 'wrong_neg':
