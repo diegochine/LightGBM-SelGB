@@ -1,39 +1,41 @@
 import numpy as np
 import lightgbm as lgb
 from collections import OrderedDict
+from random import random
 
 
 class LGBMSelGB:
 
-    def __init__(self, n_estimators, n_iter_sample, p):
+    def __init__(self, n_estimators=100, n_iter_sample=1, p=0.1, method='random'):
         self.n_estimators = n_estimators
         self.n_iter_sample = n_iter_sample
         self.p = p
+        self.method = method
         self.booster = None
         self.enable_file = False
         self.evals_result = {}
 
     def _construct_dataset(self, X, y, group, reference=None):
-        return lgb.Dataset(X, label=y, group=group, reference=reference, free_raw_data=False).construct()
+        return lgb.Dataset(X, label=y, group=group, reference=reference)
 
     def _sel_sample(self, X, y, group):
         # dtype used to keep track of idx while sorting
         dtype = np.dtype([('pred', np.float64), ('idx', np.uint64)])
         # get positive and negative indexes
         idx_pos = np.argwhere(y > 0).reshape(-1)
-        idx_pos_set = set(idx_pos)
-        idx_neg_set = set(np.argwhere(y == 0).reshape(-1))
+        idx_neg = set(np.argwhere(y == 0).reshape(-1))
         # get top p% negative examples, based on group
         # also computes new groups (number of docs for each query)
         cum = 0
         group_new = []
         top_p_idx_neg = []
         for g in group:
-            idx_pos_query = [x for x in range(cum, cum+g) if x in idx_pos_set]
-            idx_neg_query = [x for x in range(cum, cum+g) if x in idx_neg_set]
+            idx_pos_query = [x for x in range(cum, cum+g) if x in idx_pos]
+            idx_neg_query = [x for x in range(cum, cum+g) if x in idx_neg]
             preds = self.predict(X[idx_neg_query])
             preds = np.array(list(zip(preds, idx_neg_query)), dtype=dtype)
             preds.sort(order='pred')
+            self._update_p(preds=preds['pred'], pos_size=len(idx_pos_query), end=False)
             top_p = int(self.p * preds.shape[0])
             if top_p < 1 and idx_neg_query:
                 top_p = 1
@@ -41,11 +43,29 @@ class LGBMSelGB:
             group_new.append(top_p + len(idx_pos_query))
             cum += g
 
+        self._update_p(end=True)
+
         # final idx array (to keep relative ordering)
         final_idx = np.union1d(idx_pos, top_p_idx_neg)
 
         # return positive and selected negative examples
         return X[final_idx], y[final_idx], group_new
+
+    def _update_p(self, end, preds=None, pos_size=None):
+        if end:
+            if self.method == 'fixed':
+                pass
+            elif self.method == 'random':
+                self.p = random()
+            elif self.method == 'inverse':
+                self.p = self.p * 0.8
+            print('[SelGB] [Info] new p:', self.p)
+        else:
+            if self.method == 'wrong_neg':
+                if preds.size > 0:
+                    self.p = (preds > 0).sum() / preds.shape[0]
+                else:
+                    self.p = 0
 
     def get_evals_result(self):
         return self.evals_result

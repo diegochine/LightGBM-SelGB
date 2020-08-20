@@ -7,6 +7,12 @@ from LGBMSelGB import LGBMSelGB
 
 
 def compare_model_error(lgb_info, selgb_info, savefig=False):
+    '''
+    :param lgb_info:
+    :param selgb_info:
+    :param savefig:
+    :return:
+    '''
     plt.figure()  # tight_layout=True)
     plt.plot(lgb_info['train']['ndcg@10'], label='lgbm training')
     plt.plot(lgb_info['valid']['ndcg@10'], label='lgbm validation')
@@ -24,12 +30,19 @@ def compare_model_error(lgb_info, selgb_info, savefig=False):
     plt.show()
 
 
-print('start')
+def plot_doc_score_training():
+    '''
+    Plots a graph showing the variation in document scores while training the model
+    '''
+    pass
+
+
+print('START')
 # prepare dataset
-base_dir = "C:\\Users\\Diego\\Learning\\tesi\\datasets\\istella-short\\sample"
-train_file = base_dir + "\\train.txt"
-valid_file = base_dir + "\\vali.txt"
-test_file = base_dir + "\\test.txt"
+base_dir = "../datasets/istella-short/sample"
+train_file = base_dir + "/train.txt"
+valid_file = base_dir + "/vali.txt"
+test_file = base_dir + "/test.txt"
 
 train_raw = load_svmlight_file(train_file, query_id=True)
 train_data = train_raw[0]
@@ -77,13 +90,11 @@ params = {
     'ndcg_eval_at': 10
 }
 
-#lgb_model = lgb.train(params, train_set, num_boost_round=50,
- #                     valid_sets=valid_sets, valid_names=eval_names,
-  #                    verbose_eval=10, evals_result=lgb_info)
+lgb_model = lgb.train(params, train_set, num_boost_round=100,
+                      valid_sets=valid_sets, valid_names=eval_names,
+                      verbose_eval=10, evals_result=lgb_info)
 
-
-selgb_model = LGBMSelGB(200, 10, 0.1)
-print('Starting fitting')
+selgb_model = LGBMSelGB(100, 1, 0.01)
 selgb_model.fit(train_data, train_labels, train_query_lens,
                 eval_set=eval_set, eval_group=eval_group, eval_names=eval_names,
                 verbose=10)
