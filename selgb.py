@@ -1,45 +1,12 @@
 from itertools import groupby
 from sklearn.datasets import load_svmlight_file
-import matplotlib.pyplot as plt
 import lightgbm as lgb
 
-from LGBMSelGB import LGBMSelGB
-
-
-def compare_model_error(lgb_info, selgb_info, savefig=False):
-    '''
-    :param lgb_info:
-    :param selgb_info:
-    :param savefig:
-    :return:
-    '''
-    plt.figure()  # tight_layout=True)
-    plt.plot(lgb_info['train']['ndcg@10'], label='lgbm training')
-    plt.plot(lgb_info['valid']['ndcg@10'], label='lgbm validation')
-    plt.plot(lgb_info['test']['ndcg@10'], label='lgbm testing')
-    plt.plot(selgb_info['train']['ndcg@10'], label='selgb training')
-    plt.plot(selgb_info['valid']['ndcg@10'], label='selgb validation')
-    plt.plot(selgb_info['test']['ndcg@10'], label='selgb testing')
-    plt.grid()
-    plt.legend()
-    plt.xlabel('#Trees')
-    plt.ylabel('ndcg@10')
-    plt.title('Model error')
-    if savefig:
-        plt.savefig('foo.png')
-    plt.show()
-
-
-def plot_doc_score_training():
-    '''
-    Plots a graph showing the variation in document scores while training the model
-    '''
-    pass
-
+from .LGBMSelGB import LGBMSelGB
 
 print('START')
 # prepare dataset
-base_dir = "../datasets/istella-short/sample"
+base_dir = "../datasets/istella-s-letor/sample"
 train_file = base_dir + "/train.txt"
 valid_file = base_dir + "/vali.txt"
 test_file = base_dir + "/test.txt"
@@ -94,7 +61,7 @@ lgb_model = lgb.train(params, train_set, num_boost_round=100,
                       valid_sets=valid_sets, valid_names=eval_names,
                       verbose_eval=10, evals_result=lgb_info)
 
-selgb_model = LGBMSelGB(100, 1, 0.01)
+selgb_model = LGBMSelGB(n_estimators=100, n_iter_sample=10, p=0.01)
 selgb_model.fit(train_data, train_labels, train_query_lens,
                 eval_set=eval_set, eval_group=eval_group, eval_names=eval_names,
                 verbose=10)
