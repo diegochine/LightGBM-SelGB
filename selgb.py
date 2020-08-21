@@ -2,7 +2,8 @@ from itertools import groupby
 from sklearn.datasets import load_svmlight_file
 import lightgbm as lgb
 
-from .LGBMSelGB import LGBMSelGB
+from LGBMSelGB import LGBMSelGB
+from utils import compare_model_error, Timeit
 
 print('START')
 # prepare dataset
@@ -46,7 +47,6 @@ except Exception as e:
     eval_group = []
     eval_names = []
 
-lgb_info = {}
 params = {
     'objective': 'lambdarank',
     'max_position': 10,
@@ -57,13 +57,23 @@ params = {
     'ndcg_eval_at': 10
 }
 
-lgb_model = lgb.train(params, train_set, num_boost_round=100,
-                      valid_sets=valid_sets, valid_names=eval_names,
-                      verbose_eval=10, evals_result=lgb_info)
 
-selgb_model = LGBMSelGB(n_estimators=100, n_iter_sample=10, p=0.01)
+@Timeit('LGBM train')
+def train_lgbm_model():
+    evals_result = {}
+    lgb_model = lgb.train(params, train_set, num_boost_round=100,
+                          valid_sets=valid_sets, valid_names=eval_names,
+                          verbose_eval=10, evals_result=evals_result)
+    return evals_result
+
+
+lgb_info = train_lgbm_model()
+
+strategies = ('fixed', 'random', 'inverse', 'wrong_neg', 'equal_size')
+
+selgb_model = LGBMSelGB(n_estimators=100, n_iter_sample=10, p=0.025, method='equal_size')
 selgb_model.fit(train_data, train_labels, train_query_lens,
                 eval_set=eval_set, eval_group=eval_group, eval_names=eval_names,
-                verbose=10)
+                verbose=5)
 
 compare_model_error(lgb_info, selgb_model.get_evals_result())
