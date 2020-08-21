@@ -3,7 +3,8 @@ import lightgbm as lgb
 from collections import OrderedDict
 from numpy.random import uniform
 
-from .utils import timeit
+from utils import Timeit
+
 
 class LGBMSelGB:
 
@@ -16,26 +17,27 @@ class LGBMSelGB:
         self.max_p = max_p
         self.k_factor = k_factor
         self.booster = None
-        self.enable_file = False
         self.evals_result = {}
 
     def _construct_dataset(self, X, y, group, reference=None):
         return lgb.Dataset(X, label=y, group=group, reference=reference)
 
+    @Timeit('SelGB sample')
     def _sel_sample(self, X, y, group):
         # dtype used to keep track of idx while sorting
         dtype = np.dtype([('pred', np.float64), ('idx', np.uint64)])
         # get positive and negative indexes
         idx_pos = np.argwhere(y > 0).reshape(-1)
-        idx_neg = set(np.argwhere(y == 0).reshape(-1))
+        idx_pos_set = set(idx_pos)
+        idx_neg_set = set(np.argwhere(y == 0).reshape(-1))
         # get top p% negative examples, based on group
         # also computes new groups (number of docs for each query)
         cum = 0
         group_new = []
         top_p_idx_neg = []
         for g in group:
-            idx_pos_query = [x for x in range(cum, cum+g) if x in idx_pos]
-            idx_neg_query = [x for x in range(cum, cum+g) if x in idx_neg]
+            idx_pos_query = [x for x in range(cum, cum+g) if x in idx_pos_set]
+            idx_neg_query = [x for x in range(cum, cum+g) if x in idx_neg_set]
             preds = self.predict(X[idx_neg_query])
             preds = np.array(list(zip(preds, idx_neg_query)), dtype=dtype)
             preds.sort(order='pred')
@@ -57,23 +59,32 @@ class LGBMSelGB:
 
     def _update_p(self, end, preds=None, pos_size=None):
         if end:
+            # p changes after one iteration
             if self.method == 'fixed':
+                # sel gb standard
                 pass
             elif self.method == 'random':
                 self.p = uniform(0.0, self.max_p)
             elif self.method == 'inverse':
+                # decreases by k factor each iteration
                 self.p = self.p * self.k_factor
             print('[SelGB] [Info] new p:', self.p)
         else:
+            # p depends on query
             if self.method == 'wrong_neg':
+                # only false positives
                 if preds.size > 0:
                     self.p = (preds > 0).sum() / preds.shape[0]
                 else:
                     self.p = 0
+            elif self.method == 'equal_size':
+                # number of neg equals number of pos
+                self.p = min(pos_size, preds.size)/max(preds.size, 1)
 
     def get_evals_result(self):
         return self.evals_result
 
+    @Timeit('SelGB fit')
     def fit(self, X, y, group=None, verbose=True,
             eval_set=None, eval_names=None, eval_group=None):
         # basic parameters for lgb train
@@ -114,8 +125,6 @@ class LGBMSelGB:
                 valid_set = self._construct_dataset(valid_data[0], valid_data[1], eval_group[i], dstar)
                 valid_sets.append(valid_set)
             # each step, we fit n regression trees
-            if self.enable_file:
-                self.booster = 'tmp.txt'
             tmp_evals_result = {}
             self.booster = lgb.train(params, dstar,
                                      num_boost_round=self.n_iter_sample,
@@ -126,8 +135,6 @@ class LGBMSelGB:
                                      verbose_eval=verbose,
                                      evals_result=tmp_evals_result)
             self.update_evals_result(tmp_evals_result)
-            if self.enable_file:
-                self.booster.save_model('tmp.txt')
             # select new training data
             X_new, y_new, group_new = self._sel_sample(X, y, group)
         return self
