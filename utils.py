@@ -1,22 +1,32 @@
 import matplotlib.pyplot as plt
 
-def timeit(fun):
-    # decorator to log training time
-    def timed(*args, **kwargs):
-        from time import time
-        start = time()
-        result = fun(*args, **kwargs)
-        end = time()
-        print('Execution took {:.2f} min'.format((end-start)/60))
+
+class Timeit:
+    """
+    Decorator class used to log a function's execution time
+    """
+
+    def __init__(self, f_name):
+        self.f_name = f_name
+
+    def __call__(self, f):
+        def timed(*args, **kwargs):
+            from time import time
+            start = time()
+            result = f(*args, **kwargs)
+            end = time()
+            print(self.f_name + ' execution took {:.2f} min'.format((end - start) / 60))
+            return result
+        return timed
 
 
 def compare_model_error(lgb_info, selgb_info, savefig=False):
-    '''
+    """
     :param lgb_info:
     :param selgb_info:
     :param savefig:
     :return:
-    '''
+    """
     plt.figure()  # tight_layout=True)
     plt.plot(lgb_info['train']['ndcg@10'], label='lgbm training')
     plt.plot(lgb_info['valid']['ndcg@10'], label='lgbm validation')
@@ -35,7 +45,7 @@ def compare_model_error(lgb_info, selgb_info, savefig=False):
 
 
 def plot_doc_score_training():
-    '''
+    """
     Plots a graph showing the variation in document scores while training the model
-    '''
+    """
     pass
