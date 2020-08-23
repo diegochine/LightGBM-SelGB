@@ -9,13 +9,15 @@ from utils import Timeit
 class LGBMSelGB:
 
     def __init__(self, n_estimators=100, n_iter_sample=1, p=0.1,
-                 max_p=0.5, k_factor=0.5, method='random'):
+                 max_p=0.5, k_factor=0.5, delta=0.5, delta_pos=10, method='random'):
         self.n_estimators = n_estimators
         self.n_iter_sample = n_iter_sample
         self.p = p
         self.method = method
         self.max_p = max_p
         self.k_factor = k_factor
+        self.delta = delta
+        self.delta_pos = delta_pos
         self.booster = None
         self.evals_result = {}
 
@@ -36,17 +38,28 @@ class LGBMSelGB:
         group_new = []
         top_p_idx_neg = []
         for g in group:
-            idx_pos_query = [x for x in range(cum, cum+g) if x in idx_pos_set]
-            idx_neg_query = [x for x in range(cum, cum+g) if x in idx_neg_set]
-            preds = self.predict(X[idx_neg_query])
-            preds = np.array(list(zip(preds, idx_neg_query)), dtype=dtype)
+            idx_query = [x for x in range(cum, cum + g)]
+            idx_query_pos = [x for x in idx_query if x in idx_pos_set]
+            idx_query_neg = [x for x in idx_query if x in idx_neg_set]
+            preds = self.predict(X[idx_query])
+            preds = np.array(list(zip(preds, idx_query)), dtype=dtype)
             preds.sort(order='pred')
-            self._update_p(preds=preds['pred'], pos_size=len(idx_pos_query), end=False)
-            top_p = int(self.p * preds.shape[0])
-            if top_p < 1 and idx_neg_query:
-                top_p = 1
-            top_p_idx_neg += list(preds['idx'][:top_p].astype(int))
-            group_new.append(top_p + len(idx_pos_query))
+            preds = preds[::-1]
+            if self.method == 'delta':
+                score = preds[min(self.delta_pos, preds.size - 1)]['pred']
+                idx_delta = np.logical_and(score - self.delta < preds['pred'],
+                                           preds['pred'] < score + self.delta)
+                top_p_idx_neg += list(preds[idx_delta]['idx'].astype(int))
+                group_new.append(len(idx_delta))
+                if len(top_p_idx_neg) != sum(group_new):
+                    print(len(top_p_idx_neg), sum(group_new))
+            else:
+                self._update_p(preds=preds, idx_pos=idx_query_pos, idx_neg=idx_query_neg, end=False)
+                top_p = int(self.p * len(idx_query_neg))
+                if top_p < 1 and idx_query_neg:
+                    top_p = 1
+                top_p_idx_neg += list(preds[np.isin(preds['idx'], idx_query_neg)]['idx'][:top_p].astype(int))
+                group_new.append(top_p + len(idx_query_pos))
             cum += g
 
         self._update_p(end=True)
@@ -57,7 +70,14 @@ class LGBMSelGB:
         # return positive and selected negative examples
         return X[final_idx], y[final_idx], group_new
 
-    def _update_p(self, end, preds=None, pos_size=None):
+    def _update_p(self, end, preds=None, idx_pos=None, idx_neg=None):
+        """
+
+        :param end: if true, p changes after iteration, else it depends on query
+        :param preds: array of predictions ('pred', 'idx')
+        :param idx_pos: array of indexes of positive examples
+        :param idx_neg: array of indexes of negative examples
+        """
         if end:
             # p changes after one iteration
             if self.method == 'fixed':
@@ -71,29 +91,31 @@ class LGBMSelGB:
             print('[SelGB] [Info] new p:', self.p)
         else:
             # p depends on query
+            preds_neg = preds[np.isin(preds['idx'], idx_neg)]
             if self.method == 'wrong_neg':
                 # only false positives
-                if preds.size > 0:
-                    self.p = (preds > 0).sum() / preds.shape[0]
+                if preds_neg.size > 0:
+                    self.p = (preds_neg['pred'] > 0).sum() / preds_neg.size
                 else:
                     self.p = 0
             elif self.method == 'equal_size':
                 # number of neg equals number of pos
-                self.p = min(pos_size, preds.size)/max(preds.size, 1)
+                self.p = min(len(idx_pos), preds_neg.size) / max(preds_neg.size, 1)
+            elif self.method == 'delta':
+                pass
 
     def get_evals_result(self):
         return self.evals_result
 
     @Timeit('SelGB fit')
     def fit(self, X, y, group=None, verbose=True,
-            eval_set=None, eval_names=None, eval_group=None):
+            eval_set=None, eval_names=None, eval_group=None, early_stopping_rounds=None):
         # basic parameters for lgb train
         params = {
             'objective': 'lambdarank',
             'max_position': 10,
-            'learning_rate': 0.1,
-            'num_leaves': 16,
-            'min_data_in_leaf': 5,
+            'learning_rate': 0.05,
+            'num_leaves': 64,
             'metric': ['ndcg'],
             'ndcg_eval_at': 10
         }
@@ -133,7 +155,8 @@ class LGBMSelGB:
                                      init_model=self.booster,
                                      keep_training_booster=True,
                                      verbose_eval=verbose,
-                                     evals_result=tmp_evals_result)
+                                     evals_result=tmp_evals_result,
+                                     early_stopping_rounds=early_stopping_rounds)
             self.update_evals_result(tmp_evals_result)
             # select new training data
             X_new, y_new, group_new = self._sel_sample(X, y, group)
