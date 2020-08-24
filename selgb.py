@@ -7,7 +7,7 @@ from utils import compare_model_error, Timeit
 
 print('START')
 # prepare dataset
-base_dir = "../datasets/istella-s-letor/sample"
+base_dir = "../datasets/istella-short/sample"
 train_file = base_dir + "/train.txt"
 valid_file = base_dir + "/vali.txt"
 test_file = base_dir + "/test.txt"
@@ -50,9 +50,8 @@ except Exception as e:
 params = {
     'objective': 'lambdarank',
     'max_position': 10,
-    'learning_rate': 0.1,
-    'num_leaves': 16,
-    'min_data_in_leaf': 5,
+    'learning_rate': 0.05,
+    'num_leaves': 64,
     'metric': ['ndcg'],
     'ndcg_eval_at': 10
 }
@@ -61,17 +60,18 @@ params = {
 @Timeit('LGBM train')
 def train_lgbm_model():
     evals_result = {}
-    lgb_model = lgb.train(params, train_set, num_boost_round=100,
+    lgb_model = lgb.train(params, train_set, num_boost_round=150,
                           valid_sets=valid_sets, valid_names=eval_names,
-                          verbose_eval=10, evals_result=evals_result)
+                          verbose_eval=5, evals_result=evals_result)
     return evals_result
 
 
 lgb_info = train_lgbm_model()
 
-strategies = ('fixed', 'random', 'inverse', 'wrong_neg', 'equal_size')
+strategies = ('fixed', 'random_iter', 'random_query', 'inverse',
+              'wrong_neg', 'equal_size', 'delta')
 
-selgb_model = LGBMSelGB(n_estimators=100, n_iter_sample=10, p=0.025, method='equal_size')
+selgb_model = LGBMSelGB(n_estimators=150, n_iter_sample=10, p=0.05, method='delta')
 selgb_model.fit(train_data, train_labels, train_query_lens,
                 eval_set=eval_set, eval_group=eval_group, eval_names=eval_names,
                 verbose=5)
