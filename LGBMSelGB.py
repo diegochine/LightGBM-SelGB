@@ -47,12 +47,12 @@ class LGBMSelGB:
             preds = preds[::-1]
             if self.method == 'delta':
                 score = preds[min(self.delta_pos, preds.size - 1)]['pred']
-                idx_delta = np.logical_and(score - self.delta < preds['pred'],
-                                           preds['pred'] < score + self.delta)
-                top_p_idx_neg += list(preds[idx_delta]['idx'].astype(int))
-                group_new.append(len(idx_delta))
-                if len(top_p_idx_neg) != sum(group_new):
-                    print(len(top_p_idx_neg), sum(group_new))
+                preds_neg = preds[np.isin(preds['idx'], idx_query_neg)]
+                idx_delta = np.logical_and(score - self.delta < preds_neg['pred'],
+                                           preds_neg['pred'] < score + self.delta)
+                # remove positive idx
+                top_p_idx_neg += list(preds_neg[idx_delta]['idx'].astype(int))
+                group_new.append(len(idx_delta) + len(idx_query_pos))
             else:
                 self._update_p(preds=preds, idx_pos=idx_query_pos, idx_neg=idx_query_neg, end=False)
                 top_p = int(self.p * len(idx_query_neg))
@@ -83,7 +83,7 @@ class LGBMSelGB:
             if self.method == 'fixed':
                 # sel gb standard
                 pass
-            elif self.method == 'random':
+            elif self.method == 'random_iter':
                 self.p = uniform(0.0, self.max_p)
             elif self.method == 'inverse':
                 # decreases by k factor each iteration
@@ -101,8 +101,8 @@ class LGBMSelGB:
             elif self.method == 'equal_size':
                 # number of neg equals number of pos
                 self.p = min(len(idx_pos), preds_neg.size) / max(preds_neg.size, 1)
-            elif self.method == 'delta':
-                pass
+            elif self.method == 'random_query':
+                self.p = uniform(0.0, self.max_p)
 
     def get_evals_result(self):
         return self.evals_result
