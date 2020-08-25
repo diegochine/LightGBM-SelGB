@@ -4,14 +4,15 @@
 
 import os
 import sys
+import traceback
 from itertools import groupby
 
 import lightgbm as lgb
 from sklearn.datasets import load_svmlight_file
 
-from code.LGBMSelGB import LGBMSelGB
+from LGBMSelGB import LGBMSelGB
 
-from code.utils import Timeit, compare_model_error
+from utils import Timeit, compare_model_error
 
 prefix = '/opt/ml/'
 
@@ -89,9 +90,9 @@ def train():
             lgb_model = lgb.train(params, train_set, num_boost_round=1000,
                                   valid_sets=valid_sets, valid_names=eval_names,
                                   verbose_eval=5, evals_result=evals_result)
-            return evals_result
+            return lgb_model, evals_result
 
-        lgb_info = train_lgbm_model()
+        lgb_model, lgb_info = train_lgbm_model()
 
         strategies = ('fixed', 'random_iter', 'random_query', 'inverse',
                       'wrong_neg', 'equal_size', 'delta')
@@ -115,8 +116,16 @@ def train():
                                   selgb1.get_evals_result(), selgb2.get_evals_result()],
                             names=['LightGBM', 'Selgb', 'Selgb wrong_neg', 'Selgb eq_size'])
 
+        lgb_model.save_model(os.path.join(model_path, 'lightgbm'))
+        selgb_base.save_model(os.path.join(model_path, 'selgb_base'))
+        selgb1.save_model(os.path.join(model_path, 'selgb_wrong_neg'))
+        selgb2.save_model(os.path.join(model_path, 'selgb_eq_size'))
+
     except Exception as e:
-        print('Exception during training: ' + str(e) + '\n', file=sys.stderr)
+        trc = traceback.format_exc()
+        with open(os.path.join(output_path, 'failure'), 'w') as s:
+            s.write('Exception during training: ' + str(e) + '\n' + trc)
+        print('Exception during training: ' + str(e) + '\n' + trc, file=sys.stderr)
         sys.exit(255)
 
 

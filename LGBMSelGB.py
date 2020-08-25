@@ -167,3 +167,6 @@ class LGBMSelGB:
     def update_evals_result(self, tmp_evals_result):
         for key in tmp_evals_result:
             self.evals_result[key]['ndcg@10'] += tmp_evals_result[key]['ndcg@10']
+
+    def save_model(self, filename):
+        self.booster.save_model(filename)
