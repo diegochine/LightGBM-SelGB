@@ -43,15 +43,13 @@ def train():
                 train_query_lens = [len(list(group)) for key, group in groupby(train_raw[2])]
                 print("Loaded training set")
             elif 'valid' in input_file:
-                valid_file = os.path.join(input_file, 'vali.txt')
-                valid_raw = load_svmlight_file(valid_file, query_id=True)
+                valid_raw = load_svmlight_file(input_file, query_id=True)
                 valid_data = valid_raw[0]
                 valid_labels = valid_raw[1]
                 valid_query_lens = [len(list(group)) for key, group in groupby(valid_raw[2])]
                 print("Loaded validation set")
             elif 'test' in input_file:
-                test_file = os.path.join(input_file, 'test.txt')
-                test_raw = load_svmlight_file(test_file, query_id=True)
+                test_raw = load_svmlight_file(input_file, query_id=True)
                 test_data = test_raw[0]
                 test_labels = test_raw[1]
                 test_query_lens = [len(list(group)) for key, group in groupby(test_raw[2])]
