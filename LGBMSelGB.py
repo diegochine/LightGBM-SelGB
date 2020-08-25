@@ -50,9 +50,8 @@ class LGBMSelGB:
                 preds_neg = preds[np.isin(preds['idx'], idx_query_neg)]
                 idx_delta = np.logical_and(score - self.delta < preds_neg['pred'],
                                            preds_neg['pred'] < score + self.delta)
-                # remove positive idx
                 top_p_idx_neg += list(preds_neg[idx_delta]['idx'].astype(int))
-                group_new.append(len(idx_delta) + len(idx_query_pos))
+                group_new.append(idx_delta.sum() + len(idx_query_pos))
             else:
                 self._update_p(preds=preds, idx_pos=idx_query_pos, idx_neg=idx_query_neg, end=False)
                 top_p = int(self.p * len(idx_query_neg))

@@ -1,2 +1,125 @@
 #!/usr/bin/env python
 
+# Code to be run on AWS SageMaker
+
+import os
+import sys
+from itertools import groupby
+
+import lightgbm as lgb
+from sklearn.datasets import load_svmlight_file
+
+from code.LGBMSelGB import LGBMSelGB
+
+from code.utils import Timeit, compare_model_error
+
+prefix = '/opt/ml/'
+
+input_path = prefix + 'input/data'
+output_path = os.path.join(prefix, 'output')
+model_path = os.path.join(prefix, 'model')
+param_path = os.path.join(prefix, 'input/config/hyperparameters.json')
+
+# This algorithm has 3 channels of input data. Since we run in
+# File mode, the input files are copied to the directory specified here.
+channel_names = ['train', 'valid', 'test']
+training_paths = [os.path.join(input_path, channel_name) for channel_name in channel_names]
+
+
+def train():
+    print('Starting the training.')
+    try:
+        input_files = [os.path.join(training_path, file)
+                       for training_path in training_paths
+                       for file in os.listdir(training_path)]
+        if len(input_files) == 0:
+            raise ValueError('0 input files')
+        for input_file in input_files:
+            if 'train' in input_file:
+                train_raw = load_svmlight_file(input_file, query_id=True)
+                train_data = train_raw[0]
+                train_labels = train_raw[1]
+                train_query_lens = [len(list(group)) for key, group in groupby(train_raw[2])]
+                print("Loaded training set")
+            elif 'valid' in input_file:
+                valid_file = os.path.join(input_file, 'vali.txt')
+                valid_raw = load_svmlight_file(valid_file, query_id=True)
+                valid_data = valid_raw[0]
+                valid_labels = valid_raw[1]
+                valid_query_lens = [len(list(group)) for key, group in groupby(valid_raw[2])]
+                print("Loaded validation set")
+            elif 'test' in input_file:
+                test_file = os.path.join(input_file, 'test.txt')
+                test_raw = load_svmlight_file(test_file, query_id=True)
+                test_data = test_raw[0]
+                test_labels = test_raw[1]
+                test_query_lens = [len(list(group)) for key, group in groupby(test_raw[2])]
+                print("Loaded testing set")
+
+        train_set = lgb.Dataset(train_data, label=train_labels, group=train_query_lens)
+        try:
+            eval_set = [(train_data, train_labels),
+                        (valid_data, valid_labels),
+                        (test_data, test_labels)]
+            eval_group = [train_query_lens, valid_query_lens, test_query_lens]
+            eval_names = ['train', 'valid', 'test']
+            valid_sets = []
+            for i, valid_data in enumerate(eval_set):
+                ds = lgb.Dataset(valid_data[0], valid_data[1], group=eval_group[i], reference=train_set)
+                valid_sets.append(ds)
+        except Exception as e:
+            print('No valid sets loaded')
+            print(e)
+            eval_set = []
+            eval_group = []
+            eval_names = []
+
+        params = {
+            'objective': 'lambdarank',
+            'max_position': 10,
+            'learning_rate': 0.05,
+            'num_leaves': 64,
+            'metric': ['ndcg'],
+            'ndcg_eval_at': 10
+        }
+
+        @Timeit('LGBM train')
+        def train_lgbm_model():
+            evals_result = {}
+            lgb_model = lgb.train(params, train_set, num_boost_round=1000,
+                                  valid_sets=valid_sets, valid_names=eval_names,
+                                  verbose_eval=5, evals_result=evals_result)
+            return evals_result
+
+        lgb_info = train_lgbm_model()
+
+        strategies = ('fixed', 'random_iter', 'random_query', 'inverse',
+                      'wrong_neg', 'equal_size', 'delta')
+
+        selgb_base = LGBMSelGB(n_estimators=1000, n_iter_sample=1, p=0.01, method='fixed')
+        selgb_base.fit(train_data, train_labels, train_query_lens,
+                       eval_set=eval_set, eval_group=eval_group, eval_names=eval_names,
+                       verbose=5)
+
+        selgb1 = LGBMSelGB(n_estimators=1000, n_iter_sample=1, method='wrong_neg')
+        selgb1.fit(train_data, train_labels, train_query_lens,
+                   eval_set=eval_set, eval_group=eval_group, eval_names=eval_names,
+                   verbose=5)
+
+        selgb2 = LGBMSelGB(n_estimators=1000, n_iter_sample=1, method='equal_size')
+        selgb2.fit(train_data, train_labels, train_query_lens,
+                   eval_set=eval_set, eval_group=eval_group, eval_names=eval_names,
+                   verbose=5)
+
+        compare_model_error(data=[lgb_info, selgb_base.get_evals_result(),
+                                  selgb1.get_evals_result(), selgb2.get_evals_result()],
+                            names=['LightGBM', 'Selgb', 'Selgb wrong_neg', 'Selgb eq_size'])
+
+    except Exception as e:
+        print('Exception during training: ' + str(e) + '\n', file=sys.stderr)
+        sys.exit(255)
+
+
+if __name__ == '__main__':
+    train()
+    sys.exit(0)

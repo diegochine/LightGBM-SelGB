@@ -60,9 +60,9 @@ params = {
 @Timeit('LGBM train')
 def train_lgbm_model():
     evals_result = {}
-    lgb_model = lgb.train(params, train_set, num_boost_round=150,
+    lgb_model = lgb.train(params, train_set, num_boost_round=200,
                           valid_sets=valid_sets, valid_names=eval_names,
-                          verbose_eval=5, evals_result=evals_result)
+                          verbose_eval=10, evals_result=evals_result)
     return evals_result
 
 
@@ -71,9 +71,15 @@ lgb_info = train_lgbm_model()
 strategies = ('fixed', 'random_iter', 'random_query', 'inverse',
               'wrong_neg', 'equal_size', 'delta')
 
-selgb_model = LGBMSelGB(n_estimators=150, n_iter_sample=10, p=0.05, method='delta')
-selgb_model.fit(train_data, train_labels, train_query_lens,
-                eval_set=eval_set, eval_group=eval_group, eval_names=eval_names,
-                verbose=5)
+selgb1 = LGBMSelGB(n_estimators=200, n_iter_sample=10, delta=2.5, delta_pos=5, method='delta')
+selgb1.fit(train_data, train_labels, train_query_lens,
+           eval_set=eval_set, eval_group=eval_group, eval_names=eval_names,
+           verbose=10)
 
-compare_model_error(lgb_info, selgb_model.get_evals_result())
+selgb2 = LGBMSelGB(n_estimators=200, n_iter_sample=10, method='equal_size')
+selgb2.fit(train_data, train_labels, train_query_lens,
+           eval_set=eval_set, eval_group=eval_group, eval_names=eval_names,
+           verbose=10)
+
+compare_model_error(data=[lgb_info, selgb1.get_evals_result(), selgb2.get_evals_result()],
+                    names=['LightGBM', 'Selgb delta', 'Selgb eq_size'], plot=True)

@@ -17,34 +17,41 @@ class Timeit:
             end = time()
             print(self.f_name + ' execution took {:.2f} min'.format((end - start) / 60))
             return result
+
         return timed
 
 
-def compare_model_error(lgb_info, selgb_info, savefig=False):
+def compare_model_error(data, names, plot=False, savefig=False):
     """
-    :param lgb_info:
-    :param selgb_info:
+    :param data: list of dict with keys "train", "valid", "test"
+    :param names: list of model names
     :param savefig:
     :return:
     """
-    plt.figure()  # tight_layout=True)
-    plt.plot(lgb_info['train']['ndcg@10'], label='lgbm training')
-    plt.plot(lgb_info['valid']['ndcg@10'], label='lgbm validation')
-    plt.plot(lgb_info['test']['ndcg@10'], label='lgbm testing')
-    plt.plot(selgb_info['train']['ndcg@10'], label='selgb training')
-    plt.plot(selgb_info['valid']['ndcg@10'], label='selgb validation')
-    plt.plot(selgb_info['test']['ndcg@10'], label='selgb testing')
-    plt.grid()
-    plt.legend()
-    plt.xlabel('#Trees')
-    plt.ylabel('ndcg@10')
-    plt.title('Model error')
-    if savefig:
-        plt.savefig('foo.png')
-    plt.show()
+    for eval_results, model_name in zip(data, names):
+        if plot:
+            plt.figure()
+            for key in eval_results:
+                plt.plot(eval_results[key]['ndcg@10'], label=model_name + ' ' + key)
+            plt.grid()
+            plt.legend()
+            plt.xlabel('#Trees')
+            plt.ylabel('ndcg@10')
+            plt.title('Model error')
+            plt.show()
+            if savefig:
+                plt.savefig('foo.png')
+        print('{}, 150 trees: {:.4f} - {:.4f} - {:.4f}'.format(model_name,
+                                                               eval_results['train']['ndcg@10'][150],
+                                                               eval_results['valid']['ndcg@10'][150],
+                                                               eval_results['test']['ndcg@10'][150]))
+        print('{}, all trees: {:.4f} - {:.4f} - {:.4f}'.format(model_name,
+                                                               eval_results['train']['ndcg@10'][-1],
+                                                               eval_results['valid']['ndcg@10'][-1],
+                                                               eval_results['test']['ndcg@10'][-1]))
 
 
-def plot_doc_score_training():
+def plot_doc_score():
     """
     Plots a graph showing the variation in document scores while training the model
     """
