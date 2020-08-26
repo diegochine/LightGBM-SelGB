@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import pandas as pd
 
 
 class Timeit:
@@ -28,27 +29,41 @@ def compare_model_error(data, names, plot=False, savefig=False):
     :param savefig:
     :return:
     """
-    for eval_results, model_name in zip(data, names):
+    fig, axes = plt.subplots(2, figsize=(9.6, 7.2))
+    metric_150_trees = pd.DataFrame(data=np.zeros((len(model_names), len(data[0].keys()))), dtype=np.float32,
+                                    index=model_names, columns=data[0].keys())
+    metric_all_trees = pd.DataFrame(data=np.zeros((len(model_names), len(data[0].keys()))), dtype=np.float32,
+                                    index=model_names, columns=data[0].keys())
+    for eval_results, model_name in zip(eval_data, model_names):
+        for axes_row, eval_set in zip(axes, eval_results):
+            for ax in axes_row:
+                ax.plot(eval_results[eval_set][metric], label=model_name)
+                ax.grid()
+                ax.legend()
+                ax.xlabel('#Trees')
+                ax.ylabel(metric)
+                ax.title('Model error on', eval_set, 'set')
+                metric_150_trees.loc[model_name][eval_set] = eval_results['train'][metric][150]
+                metric_all_trees.loc[model_name][eval_set] = eval_results['train'][metric][-1]
         if plot:
-            plt.figure()
-            for key in eval_results:
-                plt.plot(eval_results[key]['ndcg@10'], label=model_name + ' ' + key)
-            plt.grid()
-            plt.legend()
-            plt.xlabel('#Trees')
-            plt.ylabel('ndcg@10')
-            plt.title('Model error')
             plt.show()
-            if savefig:
-                plt.savefig('foo.png')
+        if savefig:
+            plt.savefig(filename)
         print('{}, 150 trees: {:.4f} - {:.4f} - {:.4f}'.format(model_name,
-                                                               eval_results['train']['ndcg@10'][150],
-                                                               eval_results['valid']['ndcg@10'][150],
-                                                               eval_results['test']['ndcg@10'][150]))
+                                                               eval_results['train'][metric][150],
+                                                               eval_results['valid'][metric][150],
+                                                               eval_results['test'][metric][150]))
         print('{}, all trees: {:.4f} - {:.4f} - {:.4f}'.format(model_name,
-                                                               eval_results['train']['ndcg@10'][-1],
-                                                               eval_results['valid']['ndcg@10'][-1],
-                                                               eval_results['test']['ndcg@10'][-1]))
+                                                               eval_results['train'][metric][-1],
+                                                               eval_results['valid'][metric][-1],
+                                                               eval_results['test'][metric][-1]))
+        print('{}, 150 trees: {:.4f} - {:.4f} - {:.4f}'.format(model_name,
+                                                               eval_results['train'][metric][150],
+                                                               eval_results['test'][metric][150]))
+        print('{}, all trees: {:.4f} - {:.4f} - {:.4f}'.format(model_name,
+                                                               eval_results['train'][metric][-1],
+                                                               eval_results['test'][metric][-1]))
+    return metric_150_trees, metric_all_trees
 
 
 def plot_doc_score():
