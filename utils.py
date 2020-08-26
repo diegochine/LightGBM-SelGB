@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import pandas as pd
+from sklearn.datasets import load_svmlight_file
 
 
 class Timeit:
@@ -20,6 +21,14 @@ class Timeit:
             return result
 
         return timed
+
+    
+def load_data(filename):
+    raw = load_svmlight_file(filename, query_id=True)
+    data = train_raw[0]
+    labels = train_raw[1]
+    query_lens = [len(list(group)) for key, group in groupby(train_raw[2])]
+    return data, labels, query_lens
 
 
 def compare_model_error(data, names, plot=False, savefig=False):
