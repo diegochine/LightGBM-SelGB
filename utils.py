@@ -43,8 +43,8 @@ def compare_model_error(data, names, plot=False, savefig=False):
                 ax.xlabel('#Trees')
                 ax.ylabel(metric)
                 ax.title('Model error on', eval_set, 'set')
-                metric_150_trees.loc[model_name][eval_set] = eval_results['train'][metric][150]
-                metric_all_trees.loc[model_name][eval_set] = eval_results['train'][metric][-1]
+                metric_150_trees.loc[model_name][eval_set] = eval_results[eval_set][metric][150]
+                metric_all_trees.loc[model_name][eval_set] = eval_results[eval_set][metric][-1]
         if plot:
             plt.show()
         if savefig:
