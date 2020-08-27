@@ -107,17 +107,17 @@ class LGBMSelGB:
         return self.evals_result
 
     @Timeit('SelGB fit')
-    def fit(self, X, y, group=None, verbose=True,
+    def fit(self, X, y, group=None, params=None, verbose=True,
             eval_set=None, eval_names=None, eval_group=None, early_stopping_rounds=None):
-        # basic parameters for lgb train
-        params = {
-            'objective': 'lambdarank',
-            'max_position': 10,
-            'learning_rate': 0.05,
-            'num_leaves': 64,
-            'metric': ['ndcg'],
-            'ndcg_eval_at': 10
-        }
+        if params is None:
+            params = {
+                'objective': 'lambdarank',
+                'max_position': 10,
+                'learning_rate': 0.05,
+                'num_leaves': 64,
+                'metric': ['ndcg'],
+                'ndcg_eval_at': 10
+            }
 
         if group is None:
             raise ValueError("Should set group for ranking task")

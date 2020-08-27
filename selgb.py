@@ -3,7 +3,7 @@ from sklearn.datasets import load_svmlight_file
 import lightgbm as lgb
 
 from LGBMSelGB import LGBMSelGB
-from utils import compare_model_error, Timeit
+from utils import compare_model_error, Timeit, load_data
 
 print('START')
 # prepare dataset
@@ -12,23 +12,14 @@ train_file = base_dir + "/train.txt"
 valid_file = base_dir + "/vali.txt"
 test_file = base_dir + "/test.txt"
 
-train_raw = load_svmlight_file(train_file, query_id=True)
-train_data = train_raw[0]
-train_labels = train_raw[1]
-train_query_lens = [len(list(group)) for key, group in groupby(train_raw[2])]
+train_data, train_labels, train_query_lens = load_data(train_file)
 print("Loaded training set")
 
-valid_raw = load_svmlight_file(valid_file, query_id=True)
-valid_data = valid_raw[0]
-valid_labels = valid_raw[1]
-valid_query_lens = [len(list(group)) for key, group in groupby(valid_raw[2])]
-print("Loaded validation set")
+valid_data, valid_labels, valid_query_lens = load_data(valid_file)
+print('Validation set loaded')
 
-test_raw = load_svmlight_file(test_file, query_id=True)
-test_data = test_raw[0]
-test_labels = test_raw[1]
-test_query_lens = [len(list(group)) for key, group in groupby(test_raw[2])]
-print("Loaded testing set")
+test_data, test_labels, test_query_lens = load_data(test_file)
+print('Testing set loaded')
 
 train_set = lgb.Dataset(train_data, label=train_labels, group=train_query_lens)
 try:
@@ -71,15 +62,15 @@ lgb_info = train_lgbm_model()
 strategies = ('fixed', 'random_iter', 'random_query', 'inverse',
               'wrong_neg', 'equal_size', 'delta')
 
-selgb1 = LGBMSelGB(n_estimators=200, n_iter_sample=10, delta=2.5, delta_pos=5, method='delta')
+selgb1 = LGBMSelGB(n_estimators=200, n_iter_sample=1, max_p=0.2, method='random_iter')
 selgb1.fit(train_data, train_labels, train_query_lens,
            eval_set=eval_set, eval_group=eval_group, eval_names=eval_names,
            verbose=10)
 
-selgb2 = LGBMSelGB(n_estimators=200, n_iter_sample=10, method='equal_size')
+selgb2 = LGBMSelGB(n_estimators=200, n_iter_sample=1, max_p=0.2, method='random_query')
 selgb2.fit(train_data, train_labels, train_query_lens,
            eval_set=eval_set, eval_group=eval_group, eval_names=eval_names,
            verbose=10)
 
 compare_model_error(data=[lgb_info, selgb1.get_evals_result(), selgb2.get_evals_result()],
-                    names=['LightGBM', 'Selgb delta', 'Selgb eq_size'], plot=True)
+                    names=['LightGBM', 'Selgb rnd iter', 'Selgb rnd query'], plot=True)

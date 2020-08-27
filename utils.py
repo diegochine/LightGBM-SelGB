@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
+from itertools import groupby
 from sklearn.datasets import load_svmlight_file
 
 
@@ -25,24 +27,18 @@ class Timeit:
     
 def load_data(filename):
     raw = load_svmlight_file(filename, query_id=True)
-    data = train_raw[0]
-    labels = train_raw[1]
-    query_lens = [len(list(group)) for key, group in groupby(train_raw[2])]
+    data = raw[0]
+    labels = raw[1]
+    query_lens = [len(list(group)) for key, group in groupby(raw[2])]
     return data, labels, query_lens
 
 
-def compare_model_error(data, names, plot=False, savefig=False):
-    """
-    :param data: list of dict with keys "train", "valid", "test"
-    :param names: list of model names
-    :param savefig:
-    :return:
-    """
+def compare_model_error(eval_data, model_names, metric='ndcg@10', plot=False, savefig=False, filename='foo.png'):
     fig, axes = plt.subplots(2, figsize=(9.6, 7.2))
-    metric_150_trees = pd.DataFrame(data=np.zeros((len(model_names), len(data[0].keys()))), dtype=np.float32,
-                                    index=model_names, columns=data[0].keys())
-    metric_all_trees = pd.DataFrame(data=np.zeros((len(model_names), len(data[0].keys()))), dtype=np.float32,
-                                    index=model_names, columns=data[0].keys())
+    metric_150_trees = pd.DataFrame(data=np.zeros((len(model_names), len(eval_data[0].keys()))), dtype=np.float64,
+                                    index=model_names, columns=eval_data[0].keys())
+    metric_all_trees = pd.DataFrame(data=np.zeros((len(model_names), len(eval_data[0].keys()))), dtype=np.float64,
+                                    index=model_names, columns=eval_data[0].keys())
     for eval_results, model_name in zip(eval_data, model_names):
         for axes_row, eval_set in zip(axes, eval_results):
             for ax in axes_row:
@@ -66,10 +62,10 @@ def compare_model_error(data, names, plot=False, savefig=False):
                                                                eval_results['train'][metric][-1],
                                                                eval_results['valid'][metric][-1],
                                                                eval_results['test'][metric][-1]))
-        print('{}, 150 trees: {:.4f} - {:.4f} - {:.4f}'.format(model_name,
+        print('{}, 150 trees: {:.4f} - {:.4f}'.format(model_name,
                                                                eval_results['train'][metric][150],
                                                                eval_results['test'][metric][150]))
-        print('{}, all trees: {:.4f} - {:.4f} - {:.4f}'.format(model_name,
+        print('{}, all trees: {:.4f} - {:.4f}'.format(model_name,
                                                                eval_results['train'][metric][-1],
                                                                eval_results['test'][metric][-1]))
     return metric_150_trees, metric_all_trees
