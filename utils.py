@@ -34,40 +34,25 @@ def load_data(filename):
 
 
 def compare_model_error(eval_data, model_names, metric='ndcg@10', plot=False, savefig=False, filename='foo.png'):
-    fig, axes = plt.subplots(2, figsize=(9.6, 7.2))
+    fig, axes = plt.subplots(3, figsize=(10, 15))
     metric_150_trees = pd.DataFrame(data=np.zeros((len(model_names), len(eval_data[0].keys()))), dtype=np.float64,
                                     index=model_names, columns=eval_data[0].keys())
     metric_all_trees = pd.DataFrame(data=np.zeros((len(model_names), len(eval_data[0].keys()))), dtype=np.float64,
                                     index=model_names, columns=eval_data[0].keys())
     for eval_results, model_name in zip(eval_data, model_names):
-        for axes_row, eval_set in zip(axes, eval_results):
-            for ax in axes_row:
-                ax.plot(eval_results[eval_set][metric], label=model_name)
-                ax.grid()
-                ax.legend()
-                ax.xlabel('#Trees')
-                ax.ylabel(metric)
-                ax.title('Model error on', eval_set, 'set')
-                metric_150_trees.loc[model_name][eval_set] = eval_results[eval_set][metric][150]
-                metric_all_trees.loc[model_name][eval_set] = eval_results[eval_set][metric][-1]
-        if plot:
-            plt.show()
-        if savefig:
-            plt.savefig(filename)
-        print('{}, 150 trees: {:.4f} - {:.4f} - {:.4f}'.format(model_name,
-                                                               eval_results['train'][metric][150],
-                                                               eval_results['valid'][metric][150],
-                                                               eval_results['test'][metric][150]))
-        print('{}, all trees: {:.4f} - {:.4f} - {:.4f}'.format(model_name,
-                                                               eval_results['train'][metric][-1],
-                                                               eval_results['valid'][metric][-1],
-                                                               eval_results['test'][metric][-1]))
-        print('{}, 150 trees: {:.4f} - {:.4f}'.format(model_name,
-                                                               eval_results['train'][metric][150],
-                                                               eval_results['test'][metric][150]))
-        print('{}, all trees: {:.4f} - {:.4f}'.format(model_name,
-                                                               eval_results['train'][metric][-1],
-                                                               eval_results['test'][metric][-1]))
+        for ax, eval_set in zip(axes, eval_results):
+            ax.plot(eval_results[eval_set][metric], label=model_name)
+            ax.grid()
+            ax.legend()
+            ax.set_xlabel('#Trees')
+            ax.set_ylabel(metric)
+            ax.set_title('Model error on ' + eval_set + ' set')
+            metric_150_trees.loc[model_name][eval_set] = eval_results[eval_set][metric][150]
+            metric_all_trees.loc[model_name][eval_set] = eval_results[eval_set][metric][-1]
+    if plot:
+        plt.show()
+    if savefig:
+        plt.savefig(filename)
     return metric_150_trees, metric_all_trees
 
 

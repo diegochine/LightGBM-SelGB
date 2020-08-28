@@ -1,1 +1,3 @@
 *.pyc
+*-checkpoint.py
+*-checkpoint.ipynb

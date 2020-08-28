@@ -1,5 +1,5 @@
 import numpy as np
-import lightgbm as lgb
+import lightgbm as lgbm
 from collections import OrderedDict
 from numpy.random import uniform
 
@@ -19,10 +19,10 @@ class LGBMSelGB:
         self.delta = delta
         self.delta_pos = delta_pos
         self.booster = None
-        self.evals_result = {}
+        self.eval_result = {}
 
     def _construct_dataset(self, X, y, group, reference=None):
-        return lgb.Dataset(X, label=y, group=group, reference=reference)
+        return lgbm.Dataset(X, label=y, group=group, reference=reference)
 
     @Timeit('SelGB sample')
     def _sel_sample(self, X, y, group):
@@ -103,8 +103,8 @@ class LGBMSelGB:
             elif self.method == 'random_query':
                 self.p = uniform(0.0, self.max_p)
 
-    def get_evals_result(self):
-        return self.evals_result
+    def get_eval_result(self):
+        return self.eval_result
 
     @Timeit('SelGB fit')
     def fit(self, X, y, group=None, params=None, verbose=True,
@@ -134,7 +134,7 @@ class LGBMSelGB:
                 raise ValueError("Should set group for all eval datasets for ranking task; "
                                  "if you use dict, the index should start from 0")
 
-        self.evals_result = {name: OrderedDict({'ndcg@10': []}) for name in eval_names}
+        self.eval_result = {name: OrderedDict({'ndcg@10': []}) for name in eval_names}
 
         X_new, y_new, group_new = X, y, group
         # we iterate N (ensemble size) mod n (#iterations between sampling) times
@@ -147,7 +147,7 @@ class LGBMSelGB:
                 valid_sets.append(valid_set)
             # each step, we fit n regression trees
             tmp_evals_result = {}
-            self.booster = lgb.train(params, dstar,
+            self.booster = lgbm.train(params, dstar,
                                      num_boost_round=self.n_iter_sample,
                                      valid_sets=valid_sets,
                                      valid_names=eval_names,
@@ -166,7 +166,7 @@ class LGBMSelGB:
 
     def update_evals_result(self, tmp_evals_result):
         for key in tmp_evals_result:
-            self.evals_result[key]['ndcg@10'] += tmp_evals_result[key]['ndcg@10']
+            self.eval_result[key]['ndcg@10'] += tmp_evals_result[key]['ndcg@10']
 
     def save_model(self, filename):
         self.booster.save_model(filename)

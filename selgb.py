@@ -1,6 +1,6 @@
 from itertools import groupby
 from sklearn.datasets import load_svmlight_file
-import lightgbm as lgb
+import lightgbm as lgbm
 
 from LGBMSelGB import LGBMSelGB
 from utils import compare_model_error, Timeit, load_data
@@ -21,7 +21,7 @@ print('Validation set loaded')
 test_data, test_labels, test_query_lens = load_data(test_file)
 print('Testing set loaded')
 
-train_set = lgb.Dataset(train_data, label=train_labels, group=train_query_lens)
+train_set = lgbm.Dataset(train_data, label=train_labels, group=train_query_lens)
 try:
     eval_set = [(train_data, train_labels),
                 (valid_data, valid_labels),
@@ -51,7 +51,7 @@ params = {
 @Timeit('LGBM train')
 def train_lgbm_model():
     evals_result = {}
-    lgb_model = lgb.train(params, train_set, num_boost_round=200,
+    lgb_model = lgbm.train(params, train_set, num_boost_round=200,
                           valid_sets=valid_sets, valid_names=eval_names,
                           verbose_eval=10, evals_result=evals_result)
     return evals_result
@@ -72,5 +72,5 @@ selgb2.fit(train_data, train_labels, train_query_lens,
            eval_set=eval_set, eval_group=eval_group, eval_names=eval_names,
            verbose=10)
 
-compare_model_error(data=[lgb_info, selgb1.get_evals_result(), selgb2.get_evals_result()],
+compare_model_error(data=[lgb_info, selgb1.get_eval_result(), selgb2.get_eval_result()],
                     names=['LightGBM', 'Selgb rnd iter', 'Selgb rnd query'], plot=True)
