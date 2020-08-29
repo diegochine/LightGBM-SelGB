@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 from itertools import groupby
 from sklearn.datasets import load_svmlight_file
+from sklearn.metrics import ndcg_score
 
 
 class Timeit:
@@ -56,8 +57,14 @@ def compare_model_error(eval_data, model_names, metric='ndcg@10', plot=False, sa
     return metric_150_trees, metric_all_trees
 
 
-def plot_doc_score():
+def randomization_test(X, y_true, model_a, model_b, ndcg_pos=[10], n_perm=10000):
     """
-    Plots a graph showing the variation in document scores while training the model
+    This methods performs a randomization test (i.e. computes statistical significance)
+    of the performance difference between model_a and model_b
     """
-    pass
+    y_pred_a = model_a.predict(X)
+    y_pred_b = model_b.predict(X)
+    for pos in ndcg_pos:
+        ndcg_a = ndcg_score(y_score=y_pred_a, y_true=y_true, k=pos)
+        ndcg_b = ndcg_score(y_score=y_pred_b, y_true=y_true, k=pos)
+        
