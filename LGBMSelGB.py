@@ -3,7 +3,7 @@ import lightgbm as lgbm
 from collections import OrderedDict
 from numpy.random import uniform
 
-from utils import Timeit
+from .utils import Timeit
 
 
 class LGBMSelGB:
@@ -37,8 +37,8 @@ class LGBMSelGB:
         cum = 0
         group_new = []
         top_p_idx_neg = []
-        for g in group:
-            idx_query = [x for x in range(cum, cum + g)]
+        for query_size in group:
+            idx_query = [x for x in range(cum, cum + query_size)]
             idx_query_pos = [x for x in idx_query if x in idx_pos_set]
             idx_query_neg = [x for x in idx_query if x in idx_neg_set]
             preds = self.predict(X[idx_query])
@@ -59,7 +59,7 @@ class LGBMSelGB:
                     top_p = 1
                 top_p_idx_neg += list(preds[np.isin(preds['idx'], idx_query_neg)]['idx'][:top_p].astype(int))
                 group_new.append(top_p + len(idx_query_pos))
-            cum += g
+            cum += query_size
 
         self._update_p(end=True)
 
