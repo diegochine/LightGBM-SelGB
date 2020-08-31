@@ -1,9 +1,7 @@
-from itertools import groupby
-from sklearn.datasets import load_svmlight_file
 import lightgbm as lgbm
 
-from LGBMSelGB import LGBMSelGB
-from utils import compare_model_error, Timeit, load_data
+from .LGBMSelGB import LGBMSelGB
+from .utils import compare_model_error, Timeit, load_data
 
 print('START')
 # prepare dataset

@@ -25,7 +25,8 @@ class Timeit:
 
         return timed
 
-    
+
+@Timeit('load_data')
 def load_data(filename):
     raw = load_svmlight_file(filename, query_id=True)
     data = raw[0]
@@ -56,6 +57,7 @@ def compare_model_error(eval_data, model_names, metric='ndcg@10', plot=False, sa
         plt.savefig(filename)
     return metric_150_trees, metric_all_trees
 
+
 @Timeit('Randomization test')
 def randomization_test(X, y_true, group, model_a, model_b, metric='ndcg@10', n_perm=10000):
     """
@@ -75,7 +77,7 @@ def randomization_test(X, y_true, group, model_a, model_b, metric='ndcg@10', n_p
         if metric.startswith('ndcg@'):
             idx_end = idx_start + query_size
             cutoff = int(metric.split('@')[-1])
-            # ndcg_scores requires array of shape (n_samples, n_labels)
+            # ndcg_score requires array of shape (n_samples, n_labels)
             query_scores_a[i] = ndcg_score(y_score=[y_pred_a[idx_start:idx_end]], 
                                            y_true=[y_true[idx_start:idx_end]], k=cutoff)
             query_scores_b[i] = ndcg_score(y_score=[y_pred_b[idx_start:idx_end]], 
@@ -119,3 +121,33 @@ def randomization_test(X, y_true, group, model_a, model_b, metric='ndcg@10', n_p
     p2 /= n_perm
     
     return p1, p2
+
+
+def scale_down(data, labels, group, max_neg_query):
+    # dtype used to keep track of idx while sorting
+    dtype = np.dtype([('pred', np.float64), ('idx', np.uint64)])
+    chosen_idx_neg = []
+    group_new = []
+    idx_pos = np.argwhere(labels > 0).reshape(-1)
+    idx_pos_set = set(idx_pos)
+    idx_neg_set = set(np.argwhere(labels == 0).reshape(-1))
+    cum = 0
+    for query_size in group:
+        idx_query = [x for x in range(cum, cum + query_size)]
+        idx_query_pos = [x for x in idx_query if x in idx_pos_set]
+        idx_query_neg = [x for x in idx_query if x in idx_neg_set]
+        
+        # TODO sort data with bm25f function
+
+        rank = min(len(idx_query_neg), max_neg_query - len(idx_query_pos))
+        chosen_idx_neg += idx_query_neg[:rank]  # idx_query_neg must  be sorted with bm25
+        cum += query_size
+    final_idx = np.union1d(idx_pos, chosen_idx_neg)
+    return data[final_idx], labels[final_idx], group_new
+
+
+if __name__ == '__main__':
+    data = np.array([[1, 2, 3, 4], [0, 0, 0, 0], [1, 2, 1, 0], [9, 89, 7, 9], [6, 6, 6, 6], [3, 5, 2, 7], [5, 4, 7, 6]])
+    labels = np.array([0, 0, 4, 0, 0, 0, 0])
+    group = [7]
+    print(scale_down(data, labels, group, 3))
