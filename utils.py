@@ -116,7 +116,7 @@ def randomization_test(X, y_true, group, model_a, model_b, metric='ndcg@10', n_p
             p1 += 1
         if np.abs(delta) >= abs_diff:
             p2 += 1
-            
+
     p1 /= n_perm
     p2 /= n_perm
     
@@ -144,10 +144,3 @@ def scale_down(data, labels, group, max_neg_query):
         cum += query_size
     final_idx = np.union1d(idx_pos, chosen_idx_neg)
     return data[final_idx], labels[final_idx], group_new
-
-
-if __name__ == '__main__':
-    data = np.array([[1, 2, 3, 4], [0, 0, 0, 0], [1, 2, 1, 0], [9, 89, 7, 9], [6, 6, 6, 6], [3, 5, 2, 7], [5, 4, 7, 6]])
-    labels = np.array([0, 0, 4, 0, 0, 0, 0])
-    group = [7]
-    print(scale_down(data, labels, group, 3))
