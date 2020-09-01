@@ -9,7 +9,7 @@ from .utils import Timeit
 class LGBMSelGB:
 
     def __init__(self, n_estimators=100, n_iter_sample=1, p=0.1,
-                 max_p=0.5, k_factor=0.5, delta=0.5, delta_pos=10, method='random'):
+                 max_p=0.5, k_factor=0.5, delta=0.5, delta_pos=10, method='fixed'):
         self.n_estimators = n_estimators
         self.n_iter_sample = n_iter_sample
         self.p = p
