@@ -9,7 +9,7 @@ from LGBMSelGB import LGBMSelGB
 from utils import Timeit, compare_model_error, load_data
 
 base_path = os.getcwd()
-datasets_path = os.path.join(base_path, 'istella-X')
+datasets_path = os.path.join(base_path, 'datasets')
 train_file = os.path.join(datasets_path, "train.txt")
 valid_file = os.path.join(datasets_path, "vali.txt")
 test_file = os.path.join(datasets_path, "test.txt")
@@ -72,6 +72,20 @@ def train():
     selgb_base.save_model(os.path.join(models_path, 'selgb_base.txt'))
 
 
+def test_load():
+    import numpy as np
+    print('Loading data')
+    train_data, train_labels, train_query_lens = load_data(train_file)
+    print('Training set loaded')
+    print('Shape:', train_data.shape)
+    final_idx = np.sort(np.random.choice(list(range(train_data.shape[0])), size=int(train_data.shape[0]*0.1), replace=False))
+    sliced = train_data[final_idx]
+    print('Sliced1 shape:', sliced.shape)
+    final_idx = np.sort(np.random.choice(list(range(train_data.shape[0])), size=int(train_data.shape[0]*0.01), replace=False))
+    sliced = train_data[final_idx]
+    print('Sliced2 shape:', sliced.shape)
+
+
 if __name__ == '__main__':
-    train()
+    test_load()
     sys.exit(0)
