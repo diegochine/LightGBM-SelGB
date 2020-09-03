@@ -1,5 +1,7 @@
+import os
+
 import numpy as np
-import lightgbm as lgbm
+import lightgbm as lgb
 from collections import OrderedDict
 from numpy.random import uniform
 
@@ -22,7 +24,7 @@ class LGBMSelGB:
         self.eval_result = {}
 
     def _construct_dataset(self, X, y, group, reference=None):
-        return lgbm.Dataset(X, label=y, group=group, reference=reference)
+        return lgb.Dataset(X, label=y, group=group, reference=reference)
 
     @Timeit('SelGB sample')
     def _sel_sample(self, X, y, group):
@@ -64,7 +66,7 @@ class LGBMSelGB:
         self._update_p(end=True)
 
         # final idx array (to keep relative ordering)
-        final_idx = np.union1d(idx_pos, top_p_idx_neg)
+        final_idx = np.union1d(idx_pos, top_p_idx_neg).astype(int)
 
         # return positive and selected negative examples
         return X[final_idx], y[final_idx], group_new
@@ -87,7 +89,6 @@ class LGBMSelGB:
             elif self.method == 'inverse':
                 # decreases by k factor each iteration
                 self.p = self.p * self.k_factor
-            print('[SelGB] [Info] new p:', self.p)
         else:
             # p depends on query
             preds_neg = preds[np.isin(preds['idx'], idx_neg)]
@@ -137,26 +138,42 @@ class LGBMSelGB:
         self.eval_result = {name: OrderedDict({'ndcg@10': []}) for name in eval_names}
 
         X_new, y_new, group_new = X, y, group
+        n_trees = 0
         # we iterate N (ensemble size) mod n (#iterations between sampling) times
-        for i in range(self.n_estimators // self.n_iter_sample):
+        for _ in range(self.n_estimators // self.n_iter_sample):
             # create lightgbm dataset
             dstar = self._construct_dataset(X_new, y_new, group_new)
             valid_sets = []
-            for i, valid_data in enumerate(eval_set):
-                valid_set = self._construct_dataset(valid_data[0], valid_data[1], eval_group[i], dstar)
+            for j, valid_data in enumerate(eval_set):
+                valid_set = self._construct_dataset(valid_data[0], valid_data[1], eval_group[j], dstar)
                 valid_sets.append(valid_set)
             # each step, we fit n regression trees
             tmp_evals_result = {}
-            self.booster = lgbm.train(params, dstar,
+            self.booster = lgb.train(params, dstar,
                                      num_boost_round=self.n_iter_sample,
                                      valid_sets=valid_sets,
                                      valid_names=eval_names,
                                      init_model=self.booster,
                                      keep_training_booster=True,
                                      verbose_eval=verbose,
-                                     evals_result=tmp_evals_result,
-                                     early_stopping_rounds=early_stopping_rounds)
-            self.update_evals_result(tmp_evals_result)
+                                     evals_result=tmp_evals_result)
+            self.update_eval_result(tmp_evals_result)
+            n_trees += self.n_iter_sample
+            # check for early stopping
+            if early_stopping_rounds is not None and n_trees >= early_stopping_rounds + self.n_iter_sample:
+                for i, j in zip(range(n_trees - self.n_iter_sample,
+                                      n_trees),
+                                range(n_trees - early_stopping_rounds - self.n_iter_sample,
+                                      n_trees - early_stopping_rounds)):
+                    if self.eval_result['valid']['ndcg@10'][i] <= self.eval_result['valid']['ndcg@10'][j]:
+                        print('[SelGB] [Info] early stopping, best iteration:', j)
+                        self.save_model('tmp_early_stop.txt', num_iteration=j)
+                        self.booster = lgb.Booster(model_file='tmp_early_stop.txt')
+                        break
+            if 'tmp_early_stop.txt' in os.listdir():
+                # we have early stopped
+                os.remove('tmp_early_stop.txt')
+                break
             # select new training data
             X_new, y_new, group_new = self._sel_sample(X, y, group)
         return self
@@ -164,9 +181,9 @@ class LGBMSelGB:
     def predict(self, X):
         return self.booster.predict(X)
 
-    def update_evals_result(self, tmp_evals_result):
+    def update_eval_result(self, tmp_evals_result):
         for key in tmp_evals_result:
             self.eval_result[key]['ndcg@10'] += tmp_evals_result[key]['ndcg@10']
 
-    def save_model(self, filename):
-        self.booster.save_model(filename)
+    def save_model(self, filename, num_iteration=None):
+        self.booster.save_model(filename, num_iteration=num_iteration)
