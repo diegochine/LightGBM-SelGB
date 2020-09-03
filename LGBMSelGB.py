@@ -5,7 +5,7 @@ import lightgbm as lgb
 from collections import OrderedDict
 from numpy.random import uniform
 
-from .utils import Timeit
+from .utils import Timeit, dump_obj
 
 
 class LGBMSelGB:
@@ -21,7 +21,7 @@ class LGBMSelGB:
         self.delta = delta
         self.delta_pos = delta_pos
         self.booster = None
-        self.eval_result = {}
+        self._eval_result = {}
 
     def _construct_dataset(self, X, y, group, reference=None):
         return lgb.Dataset(X, label=y, group=group, reference=reference)
@@ -92,7 +92,7 @@ class LGBMSelGB:
         else:
             # p depends on query
             preds_neg = preds[np.isin(preds['idx'], idx_neg)]
-            if self.method == 'wrong_neg':
+            if self.method == 'false_positives':
                 # only false positives
                 if preds_neg.size > 0:
                     self.p = (preds_neg['pred'] > 0).sum() / preds_neg.size
@@ -103,9 +103,6 @@ class LGBMSelGB:
                 self.p = min(len(idx_pos), preds_neg.size) / max(preds_neg.size, 1)
             elif self.method == 'random_query':
                 self.p = uniform(0.0, self.max_p)
-
-    def get_eval_result(self):
-        return self.eval_result
 
     @Timeit('SelGB fit')
     def fit(self, X, y, group=None, params=None, verbose=True,
@@ -135,7 +132,7 @@ class LGBMSelGB:
                 raise ValueError("Should set group for all eval datasets for ranking task; "
                                  "if you use dict, the index should start from 0")
 
-        self.eval_result = {name: OrderedDict({'ndcg@10': []}) for name in eval_names}
+        self._eval_result = {name: OrderedDict({'ndcg@10': []}) for name in eval_names}
 
         X_new, y_new, group_new = X, y, group
         n_trees = 0
@@ -165,7 +162,7 @@ class LGBMSelGB:
                                       n_trees),
                                 range(n_trees - early_stopping_rounds - self.n_iter_sample,
                                       n_trees - early_stopping_rounds)):
-                    if self.eval_result['valid']['ndcg@10'][i] <= self.eval_result['valid']['ndcg@10'][j]:
+                    if self._eval_result['valid']['ndcg@10'][i] <= self._eval_result['valid']['ndcg@10'][j]:
                         print('[SelGB] [Info] early stopping, best iteration:', j)
                         self.save_model('tmp_early_stop.txt', num_iteration=j)
                         self.booster = lgb.Booster(model_file='tmp_early_stop.txt')
@@ -181,9 +178,18 @@ class LGBMSelGB:
     def predict(self, X):
         return self.booster.predict(X)
 
-    def update_eval_result(self, tmp_evals_result):
-        for key in tmp_evals_result:
-            self.eval_result[key]['ndcg@10'] += tmp_evals_result[key]['ndcg@10']
+    def update_eval_result(self, tmp_eval_results):
+        for key in tmp_eval_results:
+            self._eval_result[key]['ndcg@10'] += tmp_eval_results[key]['ndcg@10']
+
+    def get_eval_result(self):
+        return self._eval_result
+
+    def save_eval_result(self, path, filename=None):
+        if filename is not None:
+            dump_obj(self.get_eval_result(), path, filename)
+        else:
+            dump_obj(path, 'selgb-' + self.method)
 
     def save_model(self, filename, num_iteration=None):
         self.booster.save_model(filename, num_iteration=num_iteration)
