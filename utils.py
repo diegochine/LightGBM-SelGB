@@ -1,3 +1,6 @@
+import os
+import pickle
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -24,6 +27,21 @@ class Timeit:
             return result
 
         return timed
+
+
+def dump_obj(obj, path, filename):
+    pickle.dump(obj, open(os.path.join(path, filename + '.pkl'), 'wb'))
+
+
+def load_pkl_file(path):
+    """ if path is a dir, return list of (pickled) files in the dir; ow returns single unpiclked file"""
+    if os.path.isfile(path):
+        return pickle.load(open(path, 'rb'))
+    else:
+        res = []
+        for f in [f for f in os.listdir(path) if f.endswith('.pkl')]:
+            res.append(pickle.load(open(os.path.join(path, f), 'rb')))
+        return res
 
 
 @Timeit('load_data')
