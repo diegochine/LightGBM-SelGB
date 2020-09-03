@@ -27,8 +27,8 @@ class Timeit:
 
 
 @Timeit('load_data')
-def load_data(filename):
-    raw = load_svmlight_file(filename, query_id=True)
+def load_data(filename, dtype=np.float32):
+    raw = load_svmlight_file(filename, dtype=dtype, query_id=True)
     data = raw[0]
     labels = raw[1]
     query_lens = [len(list(group)) for key, group in groupby(raw[2])]
@@ -123,24 +123,39 @@ def randomization_test(X, y_true, group, model_a, model_b, metric='ndcg@10', n_p
     return p1, p2
 
 
-def scale_down(data, labels, group, max_neg_query):
+def scale_down(data, labels, group, max_docs):
     # dtype used to keep track of idx while sorting
-    dtype = np.dtype([('pred', np.float64), ('idx', np.uint64)])
+    dtype = np.dtype([('bm25f', np.float32), ('idx', np.uint64)])
     chosen_idx_neg = []
-    group_new = []
+    query_id_new = []
     idx_pos = np.argwhere(labels > 0).reshape(-1)
     idx_pos_set = set(idx_pos)
     idx_neg_set = set(np.argwhere(labels == 0).reshape(-1))
     cum = 0
-    for query_size in group:
+    for q_id, query_size in enumerate(group):
         idx_query = [x for x in range(cum, cum + query_size)]
         idx_query_pos = [x for x in idx_query if x in idx_pos_set]
         idx_query_neg = [x for x in idx_query if x in idx_neg_set]
-        
-        # TODO sort data with bm25f function
-
-        rank = min(len(idx_query_neg), max_neg_query - len(idx_query_pos))
-        chosen_idx_neg += idx_query_neg[:rank]  # idx_query_neg must  be sorted with bm25
+        bm25f = data[idx_query_neg][:, 44].toarray()
+        bm25f_idx = np.array(list(zip(bm25f, idx_query_neg)), dtype=dtype)
+        bm25f_idx = np.sort(bm25f_idx, order='bm25f')[::-1]
+        rank = min(len(idx_query_neg), max_docs - len(idx_query_pos))
+        if rank < 0:
+            rank = 0
+        chosen_idx_neg += list(bm25f_idx['idx'])[:rank]
         cum += query_size
-    final_idx = np.union1d(idx_pos, chosen_idx_neg)
-    return data[final_idx], labels[final_idx], group_new
+        query_id_new += [q_id] * (len(idx_query_pos) + rank)
+    final_idx = np.union1d(idx_pos, chosen_idx_neg).astype(int)
+    return data[final_idx], labels[final_idx], query_id_new
+
+
+if __name__ == '__main__':
+    from sklearn.datasets import dump_svmlight_file
+    base_dir = "../datasets/istella-short/sample"
+    train_file = base_dir + "/train.txt"
+    train_data, train_labels, train_query_lens = load_data(train_file, dtype=np.float32)
+    print("Loaded training set")
+    new_data, new_labels, new_query_id = scale_down(train_data, train_labels, train_query_lens, 20)
+    print('scaled')
+    dump_svmlight_file(new_data, new_labels, f=base_dir+'/scaled.txt', query_id=new_query_id)
+    print('dumped')
