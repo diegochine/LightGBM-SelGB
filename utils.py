@@ -1,5 +1,6 @@
 import os
 import pickle
+import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -7,6 +8,10 @@ import pandas as pd
 from itertools import groupby
 from sklearn.datasets import load_svmlight_file
 from sklearn.metrics import ndcg_score
+
+
+sys.dont_write_bytecode = True
+FLOAT_DTYPE = np.float64
 
 
 class Timeit:
@@ -45,7 +50,7 @@ def load_pkl_file(path):
 
 
 @Timeit('load_data')
-def load_data(filename, dtype=np.float32):
+def load_data(filename, dtype=FLOAT_DTYPE):
     raw = load_svmlight_file(filename, dtype=dtype, query_id=True)
     data = raw[0]
     labels = raw[1]
@@ -55,9 +60,9 @@ def load_data(filename, dtype=np.float32):
 
 def compare_model_error(eval_data, model_names, metric='ndcg@10', plot=False, savefig=False, filename='foo.png'):
     fig, axes = plt.subplots(3, figsize=(10, 15))
-    metric_150_trees = pd.DataFrame(data=np.zeros((len(model_names), len(eval_data[0].keys()))), dtype=np.float64,
+    metric_150_trees = pd.DataFrame(data=np.zeros((len(model_names), len(eval_data[0].keys()))), dtype=FLOAT_DTYPE,
                                     index=model_names, columns=eval_data[0].keys())
-    metric_all_trees = pd.DataFrame(data=np.zeros((len(model_names), len(eval_data[0].keys()))), dtype=np.float64,
+    metric_all_trees = pd.DataFrame(data=np.zeros((len(model_names), len(eval_data[0].keys()))), dtype=FLOAT_DTYPE,
                                     index=model_names, columns=eval_data[0].keys())
     for eval_results, model_name in zip(eval_data, model_names):
         for ax, eval_set in zip(axes, eval_results):
@@ -89,8 +94,8 @@ def randomization_test(X, y_true, group, model_a, model_b, metric='ndcg@10', n_p
     # per-query evaluation of given metric
     idx_start = 0
     n_queries = len(group)
-    query_scores_a = np.zeros(n_queries, dtype=np.float32)
-    query_scores_b = np.zeros(n_queries, dtype=np.float32)
+    query_scores_a = np.zeros(n_queries, dtype=FLOAT_DTYPE)
+    query_scores_b = np.zeros(n_queries, dtype=FLOAT_DTYPE)
     for i, query_size in enumerate(group):
         if metric.startswith('ndcg@'):
             idx_end = idx_start + query_size
@@ -143,7 +148,7 @@ def randomization_test(X, y_true, group, model_a, model_b, metric='ndcg@10', n_p
 
 def scale_down(data, labels, group, max_docs):
     # dtype used to keep track of idx while sorting
-    dtype = np.dtype([('bm25f', np.float32), ('idx', np.uint64)])
+    dtype = np.dtype([('bm25f', FLOAT_DTYPE), ('idx', np.uint64)])
     chosen_idx_neg = []
     query_id_new = []
     idx_pos = np.argwhere(labels > 0).reshape(-1)
@@ -171,7 +176,7 @@ if __name__ == '__main__':
     from sklearn.datasets import dump_svmlight_file
     base_dir = "../datasets/istella-short/sample"
     train_file = base_dir + "/train.txt"
-    train_data, train_labels, train_query_lens = load_data(train_file, dtype=np.float32)
+    train_data, train_labels, train_query_lens = load_data(train_file, dtype=FLOAT_DTYPE)
     print("Loaded training set")
     new_data, new_labels, new_query_id = scale_down(train_data, train_labels, train_query_lens, 20)
     print('scaled')
