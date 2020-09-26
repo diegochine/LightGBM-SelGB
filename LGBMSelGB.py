@@ -12,7 +12,8 @@ from utils import Timeit, dump_obj, FLOAT_DTYPE
 class LGBMSelGB:
 
     def __init__(self, n_estimators=100, n_iter_sample=1, p=0.1,
-                 max_p=0.2, k_factor=0.98, delta=0.5, delta_pos=10, method='fixed'):
+                 max_p=0.2, k_factor=0.98, delta=0.5, delta_pos=10,
+                 max_resample=None, method='fixed'):
         self.n_estimators = n_estimators
         self.n_iter_sample = n_iter_sample
         self.p = p
@@ -21,6 +22,9 @@ class LGBMSelGB:
         self.k_factor = k_factor
         self.delta = delta
         self.delta_pos = delta_pos
+        self.max_resample = max_resample
+        self.resample_count = None
+        self.iter = 0
         self.booster = None
         self._eval_result = {}
 
@@ -58,10 +62,27 @@ class LGBMSelGB:
                     preds_neg = np.array(list(zip(preds_neg, idx_query_neg)), dtype=pred_idx_dtype)
                     preds_neg = np.sort(preds_neg, order='pred')[::-1]
                     self._update_p(preds_neg=preds_neg, idx_pos=idx_query_pos, end=False)
+                    if self.max_resample is not None:
+                        if type(self.max_resample) is int:
+                            # each example can't be in training set more than max_resample times
+                            which_examples = self.resample_count[idx_query_neg] < self.max_resample
+                        elif type(self.max_resample) is float:
+                            # each example can't be in training set more than max_resample times * iter times
+                            which_examples = self.resample_count[idx_query_neg] < (self.max_resample * self.iter)
+                        else:
+                            raise ValueError('max_resample must be either None, int or float')
+                        idx_query_neg = idx_query_neg[which_examples]
+                        if not np.any(which_examples):
+                            # we need at least 1 example otherwise lightgbm goes mad
+                            preds_neg = preds_neg[:1]
+                        else:
+                            preds_neg = preds_neg[which_examples]
                     top_p = int(self.p * len(idx_query_neg))
                     if top_p < 1 and idx_query_neg.size > 0:
                         top_p = 1
                     top_p_idx_neg += list(preds_neg['idx'][:top_p])
+                    if self.max_resample is not None:
+                        self.resample_count[preds_neg['idx'][:top_p]] += 1
                 else:
                     # no negative examples for this query
                     top_p = 0
@@ -72,8 +93,6 @@ class LGBMSelGB:
 
         # final idx array (to keep relative ordering)
         final_idx = np.union1d(np.argwhere(y > 0).reshape(-1), top_p_idx_neg).astype(int)
-
-        # return positive and selected negative examples
         return X[final_idx], y[final_idx], group_new
 
     def _update_p(self, end, preds_neg=None, idx_pos=None, idx_neg=None):
@@ -135,15 +154,16 @@ class LGBMSelGB:
                                  "if you use dict, the index should start from 0")
 
         self._eval_result = {name: OrderedDict({'ndcg@10': []}) for name in eval_names}
+        self.resample_count = np.zeros(X.shape[0])
         if type(X) != np.ndarray:
+            # required since scipy has a nasty bug when dealing with very large matrices
             X = X.toarray()
         X_new, y_new, group_new = X, y, group
         n_trees = 0
         # we iterate N (ensemble size) mod n (#iterations between sampling) times
-        for _ in range(self.n_estimators // self.n_iter_sample):
+        for self.iter in range(1, (self.n_estimators // self.n_iter_sample) + 1):
             # create lightgbm dataset
             dstar = self._construct_dataset(X_new, y_new, group_new)
-            # del X_new, y_new, group_new
             valid_sets = []
             for j, valid_data in enumerate(eval_set):
                 valid_set = self._construct_dataset(valid_data[0], valid_data[1], eval_group[j], dstar)
@@ -217,7 +237,7 @@ if __name__ == '__main__':
     print('[INFO] Validation set loaded')
     test_data, test_labels, test_query_lens = load_data(test_file)
     print('[INFO] Testing set loaded')
-    model = LGBMSelGB(n_estimators=15, n_iter_sample=10, p=0.01, method='fixed')
+    model = LGBMSelGB(n_estimators=15, n_iter_sample=10, p=0.01, max_resample=10, method='fixed')
     print('[INFO] Starting fitting')
     eval_set = [(train_data, train_labels),
                 (valid_data, valid_labels),
