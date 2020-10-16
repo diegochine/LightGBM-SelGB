@@ -11,8 +11,8 @@ from utils import Timeit, dump_obj, FLOAT_DTYPE
 
 class LGBMSelGB:
 
-    def __init__(self, n_estimators=100, n_iter_sample=1, p=0.1,
-                 max_p=0.2, k_factor=0.98, delta=0.5, delta_pos=10,
+    def __init__(self, n_estimators=100, n_iter_sample=1, p=0.01,
+                 max_p=0.05, k_factor=0.99, delta=0.25, delta_pos=5,
                  max_resample=None, method='fixed'):
         self.n_estimators = n_estimators
         self.n_iter_sample = n_iter_sample
@@ -33,7 +33,6 @@ class LGBMSelGB:
 
     @Timeit('SelGB sample')
     def _sel_sample(self, X, y, group):
-        print('[INFO] Selecting new sample.')
         # dtype used to keep track of idx while sorting
         pred_idx_dtype = np.dtype([('pred', FLOAT_DTYPE), ('idx', np.uint64)])
         # get top p% negative examples, based on group
@@ -82,7 +81,7 @@ class LGBMSelGB:
                         top_p = 1
                     top_p_idx_neg += list(preds_neg['idx'][:top_p])
                     if self.max_resample is not None:
-                        self.resample_count[preds_neg['idx'][:top_p]] += 1
+                        self.resample_count[preds_neg['idx'][:top_p]] += self.n_iter_sample
                 else:
                     # no negative examples for this query
                     top_p = 0
@@ -110,7 +109,7 @@ class LGBMSelGB:
                 pass
             elif self.method == 'random_iter':
                 self.p = uniform(0.0, self.max_p)
-            elif self.method == 'inverse':
+            elif self.method == 'decay':
                 # decreases by k factor each iteration
                 self.p = self.p * self.k_factor
         else:
@@ -154,7 +153,7 @@ class LGBMSelGB:
                                  "if you use dict, the index should start from 0")
 
         self._eval_result = {name: OrderedDict({'ndcg@10': []}) for name in eval_names}
-        self.resample_count = np.zeros(X.shape[0])
+        self.resample_count = np.full(shape=X.shape[0], fill_value=self.n_iter_sample)
         if type(X) != np.ndarray:
             # required since scipy has a nasty bug when dealing with very large matrices
             X = X.toarray()
@@ -170,7 +169,6 @@ class LGBMSelGB:
                 valid_sets.append(valid_set)
             # each step, we fit n regression trees
             tmp_evals_result = {}
-            print('[INFO] Datasets ready, training booster')
             self.booster = lgb.train(params, dstar,
                                      num_boost_round=self.n_iter_sample,
                                      valid_sets=valid_sets,
