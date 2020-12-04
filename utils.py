@@ -52,7 +52,7 @@ def load_pkl_file(path):
 @Timeit('load_data')
 def load_data(filename, dtype=FLOAT_DTYPE):
     raw = load_svmlight_file(filename, dtype=dtype, query_id=True)
-    data = raw[0]
+    data = raw[0].toarray()
     labels = raw[1]
     query_lens = [len(list(group)) for key, group in groupby(raw[2])]
     return data, labels, query_lens

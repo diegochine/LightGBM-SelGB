@@ -27,6 +27,7 @@ class LGBMSelGB:
         self.iter = 0
         self.booster = None
         self._eval_result = {}
+        self._idx_queries = []
 
     def _construct_dataset(self, X, y, group, reference=None):
         return lgb.Dataset(X, label=y, group=group, reference=reference)
@@ -40,11 +41,9 @@ class LGBMSelGB:
         cum = 0
         group_new = []
         top_p_idx_neg = []
-        for query_size in group:
-            idx_query = np.array(range(cum, cum + query_size))
-            idx_query_pos = np.array([x for x in idx_query if y[x] > 0])
-            idx_query_neg = np.array([x for x in idx_query if y[x] == 0])
+        for idx_query_pos, idx_query_neg in self._idx_queries:
             if self.method == 'delta':
+                idx_query = np.union1d(idx_query_pos, idx_query_neg)
                 preds = self.predict(X[idx_query])
                 preds = np.array(list(zip(preds, idx_query)), dtype=pred_idx_dtype)
                 preds = np.sort(preds, order='pred')[::-1]
@@ -86,7 +85,6 @@ class LGBMSelGB:
                     # no negative examples for this query
                     top_p = 0
                 group_new.append(top_p + len(idx_query_pos))
-            cum += query_size
 
         self._update_p(end=True)
 
@@ -157,6 +155,16 @@ class LGBMSelGB:
         if type(X) != np.ndarray:
             # required since scipy has a nasty bug when dealing with very large matrices
             X = X.toarray()
+
+        # precompute indexes (both pos and neg) of each query
+        cum = 0
+        for query_size in group:
+            idx_query = np.array(range(cum, cum + query_size))
+            idx_query_pos = np.array([x for x in idx_query if y[x] > 0])
+            idx_query_neg = np.array([x for x in idx_query if y[x] == 0])
+            self._idx_queries.append((idx_query_pos, idx_query_neg))
+            cum += query_size
+
         X_new, y_new, group_new = X, y, group
         n_trees = 0
         # we iterate N (ensemble size) mod n (#iterations between sampling) times
